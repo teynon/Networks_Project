@@ -111,11 +111,11 @@ int ToInt(std::vector<bool> bits)
 }
 
 void OneBitSliding() {
-	std::string message;
 	std::string value;
 	int frameNum = -1;
-	int lastFrameNum = -1;
 	int frameTot = -1;
+	int lastSize = -1;
+	std::vector<std::string> frames;
 	
 	while (true) {
 		value = Listen();
@@ -126,8 +126,8 @@ void OneBitSliding() {
 		}
 		
 		// Fake an error 20% of the time.
-		/*
-		if (FakeError(0)) {
+		///*
+		if (FakeError(10)) {
 			printf("Faking error.\n");
 			continue;
 		}
@@ -142,13 +142,13 @@ void OneBitSliding() {
 		std::size_t ftPos = value.find("|");
 		std::string frameTotal = value.substr(fnPos + 1, ftPos - fnPos - 1);
 		frameTot = atoi(frameTotal.c_str());
+		if (lastSize == -1) {
+			frames.resize(frameTot);
+			lastSize = frameTot;
+		}
 		
 		// Append to message.
-		if (frameNum == lastFrameNum) {
-			message = message.substr(0, message.size() - 1);
-		}
-		lastFrameNum = frameNum;
-		message += value.substr(ftPos + 1, value.size() - ftPos - 1);
+		frames[frameNum] = value.substr(ftPos + 1, value.size() - ftPos - 1);
 		
 		// Show status.
 		//printf("Frame #: %s Frame Total: %s \n", frameNumber.c_str(), frameTotal.c_str());
@@ -164,22 +164,23 @@ void OneBitSliding() {
 	int counter = 0;
 	std::string output;
 	std::string line = "";
-	for (int i = 0; i < message.size(); i++) {
+	//std::string message = "";
+	for (int i = 0; i < frames.size(); i++) {
 		if (counter == 31) {
 			//printf("Decoded: %s", (char)ToInt(bits));
-			bits[counter++] = (message[i] == '1');
-			line += (message[i] == '1') ? "1" : "0";
+			bits[counter++] = (frames[i] == "1");
+			line += (frames[i] == "1") ? "1" : "0";
 			printf("Char: %s %d\n", line.c_str(), ToInt(bits));
 			line = "";
 			output += (char)ToInt(bits);
 			counter = 0;
 		}
 		else {
-			bits[counter++] = (message[i] == '1');
-			line += (message[i] == '1') ? "1" : "0";
+			bits[counter++] = (frames[i] == "1");
+			line += (frames[i] == "1") ? "1" : "0";
 		}
 	}
-	printf("Raw Message Received: \n%s \n", message.c_str());
+	//printf("Raw Message Received: \n%s \n", frames.c_str());
 	printf("Message Received: %s \n", output.c_str());
 }
 
