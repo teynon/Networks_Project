@@ -30,6 +30,7 @@ void cleanup()
 	unlink(in.sun_path);
 }
 
+// Generate the CRC.
 std::string generator(std::string message) {
 	std::string check = "";
 	int j = 0;
@@ -61,6 +62,7 @@ std::string generator(std::string message) {
 	return check;
 }
 
+// Verify the received message & crc.
 bool verifier(std::string message, std::string poly) {
 	std::string polynomial = generator(message);
 	//printf("Message: %s Poly1: %s Poly2: %s\n", message.c_str(), polynomial.c_str(), poly.c_str());
@@ -72,6 +74,7 @@ bool verifier(std::string message, std::string poly) {
 	}
 }
 
+// Merge two bool vectors.
 std::vector<bool> MergeVectors(std::vector<bool> left, std::vector<bool> right) {
 	std::vector<bool> AB;
 	AB.reserve(left.size() + right.size());
@@ -80,6 +83,7 @@ std::vector<bool> MergeVectors(std::vector<bool> left, std::vector<bool> right) 
 	return AB;
 }
 
+// Convert an integer to a vector<bool> binary representation.
 std::vector<bool> ToBits(int val) {
 	int numBits = 32;
 	std::vector<bool> bits(numBits);
@@ -93,6 +97,7 @@ std::vector<bool> ToBits(int val) {
 	return bits;
 }
 
+// Convert a string to binary.
 std::vector<bool> StringToBits(std::string msg) {
 	std::vector<bool> results;
 	for (int i = 0; i < msg.size(); i++) {
@@ -103,6 +108,7 @@ std::vector<bool> StringToBits(std::string msg) {
 	return results;
 }
 
+// Convert binary to integer.
 int ToInt(std::vector<bool> bits) 
 {
 	int val = 0;
@@ -115,6 +121,7 @@ int ToInt(std::vector<bool> bits)
 	return val;
 }
 
+// Convert a string of binary to integer.
 int ToInt(std::string bits) {
 	int val = 0;
 	for (int i = 0; i < bits.size(); i++) {
@@ -126,6 +133,7 @@ int ToInt(std::string bits) {
 	return val;
 }
 
+// Convert an integer to a bit string.
 std::string ToBitString(int val) {
 	std::vector<bool> bits = ToBits(val);
 	std::string result = "";
@@ -137,6 +145,7 @@ std::string ToBitString(int val) {
 	return result;
 }
 
+// Decode message based on defined rules.
 void DecodeMessage(std::string &message, int &frameNumber, int &frameTotal, std::string &data, int &ackFrame, std::string &crc) {
 	// First 4 bytes = message length;
 	try {
@@ -185,6 +194,7 @@ void DecodeMessage(std::string &message, int &frameNumber, int &frameTotal, std:
 	}
 }
 
+// Encode message based on defined rules.
 std::string EncodeMessage(std::string buf, int frame, int total, int ackFrame) {
 	// First 4 bytes = message length
 	// Second 4 bytes = frame #
@@ -211,6 +221,7 @@ std::string EncodeMessage(std::string buf, int frame, int total, int ackFrame) {
 	return result;
 }
 
+// Initialize listener socket.
 void InitListener(bool last) {
 	in.sun_family = AF_UNIX;
 	
@@ -226,17 +237,19 @@ void InitListener(bool last) {
 	n = bind(sckIn, (const struct sockaddr *)&in, sizeof(in));
 	if (n < 0)
 	{
-		fprintf(stderr, "bind failed\n");
 		cleanup();
 		if (!last) {
 			InitListener(true);
 		}
 		else {
+			fprintf(stderr, "bind failed\n");
+			cleanup();
 			exit(1);
 		}
 	}
 }
 
+// Initialize sockets.
 void InitSockets() {
 	// Init socket.    
 	// ---------------------------
@@ -255,6 +268,7 @@ void InitSockets() {
 	// ---------------------------
 }
 
+// Send the message & occasionally simulate an error.
 void Send(std::string buf, int frame, int total, int ackFrame) {
 	std::string msg = EncodeMessage(buf, frame, total, ackFrame);
 	
@@ -277,12 +291,13 @@ void Send(std::string buf, int frame, int total, int ackFrame) {
 	}
 }
 
+// Listen for a response.
 std::string Listen() {
 	char buf[BUFFER];
 	int n;
 	struct timeval tv;
 	tv.tv_sec = 0;
-	tv.tv_usec = 200;
+	tv.tv_usec = 400;
 	if (setsockopt(sckIn, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
 		printf("Error setting timeout.\n");
 	}
@@ -300,6 +315,7 @@ std::string Listen() {
 	}
 }
 
+// Transmit & receive message using the one bit sliding window.
 void OneBitSliding(std::string message) {
 	std::vector<std::string> incomingFrames;
 	std::vector<bool> outgoingFrames = StringToBits(message);
