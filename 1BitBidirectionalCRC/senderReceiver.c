@@ -11,18 +11,35 @@
 #include <iostream>     /* UNIX domain header */
 
 #define BUFFER 1024
+// Using two different sockets to prevent the socket from reading itself.
+// Incoming socket.
 static int sckIn;
+// Outgoing socket.
 static int sckOut;
+
+// File to use for sending. (Or swapped if is party B)
 const char *sckInAddr = "./sender_soc";
+// File to use for receiving. (Or swapped if is party B)
 const char *sckOutAddr = "./receiver_soc";
+
 static struct sockaddr_un in;
 static struct sockaddr_un out;
+
+// Number of incoming frames.
 static int incomingFramesTotal = -1;
+// Last received frame
 static int incomingLastFrame = -1;
+
+// If this instance is party A or B
 static bool isA = true;
+
+// CRC polynomial
 static std::string generatorPoly = "1001101";
 
 
+// SOCKETS - Thomas
+// -----------------------------------------------------------
+// Close any open sockets. This should always be called.
 void cleanup()
 {
 	close(sckIn);
@@ -30,7 +47,130 @@ void cleanup()
 	unlink(in.sun_path);
 }
 
-// Generate the CRC.
+// Initialize listener socket.
+void InitListener(bool last) {
+	in.sun_family = AF_UNIX;
+	
+	if (isA) {
+		strcpy(in.sun_path, sckOutAddr);
+	}
+	else {
+		strcpy(in.sun_path, sckInAddr);
+	}
+	
+	sckIn = socket(AF_UNIX, SOCK_DGRAM, 0);
+	int n;
+	n = bind(sckIn, (const struct sockaddr *)&in, sizeof(in));
+	if (n < 0)
+	{
+		cleanup();
+		if (!last) {
+			InitListener(true);
+		}
+		else {
+			fprintf(stderr, "bind failed\n");
+			cleanup();
+			exit(1);
+		}
+	}
+}
+
+// Initialize sockets.
+void InitSockets() {
+	// Init socket.    
+	out.sun_family = AF_UNIX;
+	
+	if (isA) {
+		strcpy(out.sun_path, sckInAddr);
+	}
+	else {
+		strcpy(out.sun_path, sckOutAddr);
+	}
+	
+	sckOut = socket(AF_UNIX, SOCK_DGRAM, 0);
+
+	InitListener(false);
+}
+
+// UTILITIES - Thomas
+// -----------------------------------------------------
+// Merge two bool vectors.
+std::vector<bool> MergeVectors(std::vector<bool> left, std::vector<bool> right) {
+	std::vector<bool> AB; // New vector.
+	AB.reserve(left.size() + right.size()); // Resize to total of both left and right.
+	AB.insert(AB.end(), left.begin(), left.end()); // Insert left.
+	AB.insert(AB.end(), right.begin(), right.end()); // Insert right.
+	return AB;
+}
+
+// Convert an integer to a vector<bool> binary representation.
+std::vector<bool> ToBits(int val) {
+	int numBits = 32; // Assume 32 bit integer.
+	std::vector<bool> bits(numBits);
+	int32_t v = val;
+
+	// Loop through each of the 32 bits and set the bool flag to true if the integer is set.
+	for (int i = numBits - 1; i >= 0; i--) {
+		int power = pow(2, i);
+		bits[i] = v & power; // If the x (power) bit is true and the integer bit is true, then the bit is true.
+	}
+
+	return bits;
+}
+
+// Convert a string to binary.
+std::vector<bool> StringToBits(std::string msg) {
+	std::vector<bool> results;
+	for (int i = 0; i < msg.size(); i++) {
+		// Convert the character to its ascii equivalent and then get the bit values.
+		std::vector<bool> data = ToBits((int)msg[i]);
+		results = MergeVectors(results, data); // This may be unnecessary.
+	}
+	
+	return results;
+}
+
+// Convert binary to integer. (Undo what was done above)
+int ToInt(std::vector<bool> bits) 
+{
+	int val = 0;
+	for (int i = 0; i < bits.size(); i++) {
+		if (bits[i]) { // If the bit is true, set the bit to 1 for the integer.
+			val |= 1 << i;
+		}
+	}
+
+	return val;
+}
+
+// Convert a string of binary to integer. Same as above except for a string.
+int ToInt(std::string bits) {
+	int val = 0;
+	for (int i = 0; i < bits.size(); i++) {
+		if (bits[i] == '1') {
+			val |= 1 << i;
+		}
+	}
+	
+	return val;
+}
+
+// Convert an integer to a bit string.
+std::string ToBitString(int val) {
+	std::vector<bool> bits = ToBits(val);
+	std::string result = "";
+	for (int i = 0; i < bits.size(); i++) {
+		if (bits[i]) result += "1";
+		else result += "0";
+	}
+	
+	return result;
+}
+
+// CRC - Patrick
+// ----------------------------------------------------------
+// GENERATOR - Implemented By Patrick Hoerrle
+// Generate the CRC. The generator is also called to verify.
 std::string generator(std::string message) {
 	std::string check = "";
 	int j = 0;
@@ -62,6 +202,7 @@ std::string generator(std::string message) {
 	return check;
 }
 
+// VERIFIER
 // Verify the received message & crc.
 bool verifier(std::string message, std::string poly) {
 	std::string polynomial = generator(message);
@@ -73,79 +214,22 @@ bool verifier(std::string message, std::string poly) {
 		return false;
 	}
 }
+// END CRC
+// -------------------------------------------------
 
-// Merge two bool vectors.
-std::vector<bool> MergeVectors(std::vector<bool> left, std::vector<bool> right) {
-	std::vector<bool> AB;
-	AB.reserve(left.size() + right.size());
-	AB.insert(AB.end(), left.begin(), left.end());
-	AB.insert(AB.end(), right.begin(), right.end());
-	return AB;
-}
 
-// Convert an integer to a vector<bool> binary representation.
-std::vector<bool> ToBits(int val) {
-	int numBits = 32;
-	std::vector<bool> bits(numBits);
-	int32_t v = val;
 
-	for (int i = numBits - 1; i >= 0; i--) {
-		int power = pow(2, i);
-		bits[i] = v & power;
-	}
 
-	return bits;
-}
-
-// Convert a string to binary.
-std::vector<bool> StringToBits(std::string msg) {
-	std::vector<bool> results;
-	for (int i = 0; i < msg.size(); i++) {
-		std::vector<bool> data = ToBits((int)msg[i]);
-		results = MergeVectors(results, data);
-	}
-	
-	return results;
-}
-
-// Convert binary to integer.
-int ToInt(std::vector<bool> bits) 
-{
-	int val = 0;
-	for (int i = 0; i < bits.size(); i++) {
-		if (bits[i]) {
-			val |= 1 << i;
-		}
-	}
-
-	return val;
-}
-
-// Convert a string of binary to integer.
-int ToInt(std::string bits) {
-	int val = 0;
-	for (int i = 0; i < bits.size(); i++) {
-		if (bits[i] == '1') {
-			val |= 1 << i;
-		}
-	}
-	
-	return val;
-}
-
-// Convert an integer to a bit string.
-std::string ToBitString(int val) {
-	std::vector<bool> bits = ToBits(val);
-	std::string result = "";
-	for (int i = 0; i < bits.size(); i++) {
-		if (bits[i]) result += "1";
-		else result += "0";
-	}
-	
-	return result;
-}
-
+// MESSAGE FORMAT - Thomas
+// --------------------------------------------------
 // Decode message based on defined rules.
+// 
+// - Message Length (NOT INCLUDING CRC) - 32 bits 
+// - Frame Number - 32 bits
+// - Frame Total - 32 bits
+// - ACK / NAK - 2 bits (0 = IGNORE, 1 = ACK)
+// - Message - N characters * 32 bits - while position < message length
+// - CRC - Remainder of message
 void DecodeMessage(std::string &message, int &frameNumber, int &frameTotal, std::string &data, int &ackFrame, std::string &crc) {
 	// First 4 bytes = message length;
 	try {
@@ -221,53 +305,8 @@ std::string EncodeMessage(std::string buf, int frame, int total, int ackFrame) {
 	return result;
 }
 
-// Initialize listener socket.
-void InitListener(bool last) {
-	in.sun_family = AF_UNIX;
-	
-	if (isA) {
-		strcpy(in.sun_path, sckOutAddr);
-	}
-	else {
-		strcpy(in.sun_path, sckInAddr);
-	}
-	
-	sckIn = socket(AF_UNIX, SOCK_DGRAM, 0);
-	int n;
-	n = bind(sckIn, (const struct sockaddr *)&in, sizeof(in));
-	if (n < 0)
-	{
-		cleanup();
-		if (!last) {
-			InitListener(true);
-		}
-		else {
-			fprintf(stderr, "bind failed\n");
-			cleanup();
-			exit(1);
-		}
-	}
-}
-
-// Initialize sockets.
-void InitSockets() {
-	// Init socket.    
-	// ---------------------------
-	out.sun_family = AF_UNIX;
-	
-	if (isA) {
-		strcpy(out.sun_path, sckInAddr);
-	}
-	else {
-		strcpy(out.sun_path, sckOutAddr);
-	}
-	
-	sckOut = socket(AF_UNIX, SOCK_DGRAM, 0);
-
-	InitListener(false);
-	// ---------------------------
-}
-
+// MESSAGE SENDING & RECEIVING - Thomas
+// --------------------------------------------------------
 // Send the message & occasionally simulate an error.
 void Send(std::string buf, int frame, int total, int ackFrame) {
 	std::string msg = EncodeMessage(buf, frame, total, ackFrame);
@@ -332,10 +371,12 @@ void OneBitSliding(std::string message) {
 	std::string crc = "";
 	
 	printf("Attempt To Send.\n");
+	// While frames to send or receive
 	while (lastAckSent < incomingFramesTotal || incomingAckFrame < outgoingFrameTotal) {
 		bool isOutgoingData = false;
 		
 		// Send message. Wait for response.
+		// See if there is data waiting to be sent
 		std::string outgoingData = "0";
 		if (outgoingFrame < outgoingFrameTotal - 1) {
 			isOutgoingData = true;
@@ -343,17 +384,18 @@ void OneBitSliding(std::string message) {
 			else outgoingData = "0";
 		}
 		
+		// If data to send or ACK pending send it.
 		if (isOutgoingData || pendingAck != -1) {
 			Send(outgoingData, outgoingFrame, outgoingFrameTotal, pendingAck);
 			lastAckSent = pendingAck;
 			pendingAck = -1;
 		}
 		
+		// Listen for response
 		incomingMessage = Listen();
 		
 		// If incoming message is empty, no message received. We must resend last message.
 		if (incomingMessage.empty()) {
-			// Only resend if we weren't already finished sending. Otherwise, we are just acknowledging incoming messages.
 			continue;
 		}
 		else {

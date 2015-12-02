@@ -194,8 +194,9 @@ void OneBitSliding(std::string message) {
 	std::string incomingData = "";
 	
 	printf("Attempt To Send.\n");
-	while (incomingLastFrame < incomingFramesTotal - 1 || outgoingFrame < outgoingFrameTotal - 1) {
+	while (incomingLastFrame < incomingFramesTotal || outgoingFrame < outgoingFrameTotal) {
 		bool isOutgoingData = false;
+		printf("LastFrame: %d/%d Outgoing: %d/%d\n", incomingLastFrame, incomingFramesTotal, outgoingFrame, outgoingFrameTotal);
 		
 		// Send message. Wait for response.
 		std::string outgoingData = "-1";
@@ -232,8 +233,11 @@ void OneBitSliding(std::string message) {
 				incomingFramesLastSize = incomingFramesTotal;
 			}
 			
-			if (incomingFrame != -1) {
+			if (incomingFrame != -1 && incomingFrame < incomingFramesTotal) {
 				incomingFrames[incomingFrame] = incomingData;
+			}
+			
+			if (incomingFrame != -1) {
 				incomingLastFrame = incomingFrame;
 			}
 			

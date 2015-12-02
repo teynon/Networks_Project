@@ -9,6 +9,8 @@
 #include <iostream>     /* UNIX domain header */
 #include <sstream>
 
+// I don't remember what this does. It fixed something, don't remember though...
+// May not be necessary now.
 namespace patch
 {
     template < typename T > std::string to_string( const T& n )
@@ -27,6 +29,10 @@ const char *sckOutAddr = "./sender_soc";
 static struct sockaddr_un in;
 static struct sockaddr_un out;
 
+
+// SOCKETS - Thomas
+// -----------------------------------------------------------
+// Close any open sockets. This should always be called.
 void cleanup()
 {
 	close(sckIn);
@@ -34,12 +40,14 @@ void cleanup()
 	unlink(in.sun_path);
 }
 
+// Should we fake an error?
 bool FakeError(int percentageChance) {
 	int r = rand() % 100;
 	if (r <= percentageChance) return true;
 	return false;
 }
 
+// Initialize listener socket.
 void InitListener() {
 	in.sun_family = AF_UNIX;
 	strcpy(in.sun_path, sckOutAddr);
@@ -65,6 +73,7 @@ void InitSockets() {
 	// ---------------------------
 }
 
+// Send the specified message.
 void Send(std::string buf) {
 	int n;
 	if (access(out.sun_path, F_OK) > -1) {
@@ -79,6 +88,7 @@ void Send(std::string buf) {
 	}
 }
 
+// Listen for a response.
 std::string Listen() {
 	char buf[BUFFER];
 	int n;
@@ -97,6 +107,7 @@ std::string Listen() {
 	return buf;
 }
 
+// Convert binary to integer.
 int ToInt(std::vector<bool> bits) 
 {
 	int val = 0;
@@ -110,6 +121,7 @@ int ToInt(std::vector<bool> bits)
 	return val;
 }
 
+// One Bit Sliding Window
 void OneBitSliding() {
 	std::string value;
 	int frameNum = -1;
@@ -125,7 +137,7 @@ void OneBitSliding() {
 			continue;
 		}
 		
-		// Fake an error 20% of the time.
+		// Fake an error x% of the time.
 		///*
 		if (FakeError(10)) {
 			printf("Faking error.\n");
@@ -156,7 +168,10 @@ void OneBitSliding() {
 		// Send reply "ACK{FrameNumber}"
 		std::string msg = "ACK" + frameNumber;
 		Send(msg);
-		if (frameTot != -1 && frameNum == frameTot -1) break;
+		
+		// If we've received all the frames, break the loop
+		if (frameTot != -1 && frameNum == frameTot - 1) 
+			break;
 	}
 	
 	// Convert message to string
